@@ -1,5 +1,7 @@
 # RDZ HMI Control for Home Assistant
 
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+
 A custom Home Assistant integration for controlling RDZ Graphic Tablet (HMI) thermostats via Modbus TCP. This allows you to remotely monitor and control your RDZ HVAC system directly from Home Assistant.
 
 ## Features
@@ -18,6 +20,16 @@ A custom Home Assistant integration for controlling RDZ Graphic Tablet (HMI) the
 - **Important**: All thermostats must be set to **manual mode** on the physical devices
 
 ## Installation
+
+### HACS (Recommended)
+
+1. Open HACS in your Home Assistant instance
+2. Click on the three dots in the top right corner
+3. Select "Custom repositories"
+4. Add this repository URL and select "Integration" as the category
+5. Click "Add"
+6. Search for "RDZ HMI Control" and install it
+7. Restart Home Assistant
 
 ### Manual Installation
 

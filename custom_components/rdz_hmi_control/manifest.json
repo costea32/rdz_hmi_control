@@ -1,10 +1,10 @@
 {
   "domain": "rdz_hmi_control",
   "name": "RDZ HMI Control",
-  "codeowners": [],
+  "codeowners": ["@costea32"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/your-repo/rdz_hmi_control",
+  "documentation": "https://github.com/costea32/rdz_hmi_control",
   "integration_type": "device",
   "iot_class": "local_polling",
   "requirements": ["pymodbus>=3.6.0"],
