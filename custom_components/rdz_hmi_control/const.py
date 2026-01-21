@@ -1,0 +1,56 @@
+"""Constants for RDZ HMI Control integration."""
+
+DOMAIN = "rdz_hmi_control"
+
+# Modbus connection defaults
+DEFAULT_PORT = 8000
+DEFAULT_SCAN_INTERVAL = 30
+
+# Modbus register addresses
+REGISTER_TEMP_START = 2700
+REGISTER_TEMP_COUNT = 64
+
+REGISTER_WINTER_SETPOINT_START = 300
+REGISTER_WINTER_SETPOINT_COUNT = 64
+
+REGISTER_SUMMER_SETPOINT_START = 364
+REGISTER_SUMMER_SETPOINT_COUNT = 64
+
+# Coil addresses
+COIL_SEASON = 2  # 0 = winter, 1 = summer
+
+# Activity bitmask registers (4 registers, 16 bits each = 64 zones)
+REGISTER_ACTIVITY_START = 2892
+REGISTER_ACTIVITY_COUNT = 4
+
+# Config keys
+CONF_HOST = "host"
+CONF_PORT = "port"
+CONF_ZONES = "zones"
+
+# Zone config keys
+CONF_ZONE_ID = "zone_id"
+CONF_ZONE_NAME = "name"
+CONF_ZONE_TYPE = "type"
+CONF_LINKED_VIRTUAL_ZONE = "linked_virtual_zone"
+CONF_HVAC_MODE = "hvac_mode"
+
+# Thermostat types
+THERMOSTAT_TYPE_REAL = "real"
+THERMOSTAT_TYPE_VIRTUAL = "virtual"
+THERMOSTAT_TYPE_UNCONFIGURED = "unconfigured"
+
+# Data keys in coordinator
+DATA_TEMPERATURES = "temperatures"
+DATA_WINTER_SETPOINTS = "winter_setpoints"
+DATA_SUMMER_SETPOINTS = "summer_setpoints"
+DATA_SEASON = "season"  # True = summer, False = winter
+DATA_ZONE_ACTIVITY = "zone_activity"  # dict[int, bool] - zone_id -> is_active
+
+# Temperature scale factor (Modbus returns values * 10)
+TEMP_SCALE_FACTOR = 10.0
+
+# Min/Max temperature limits
+MIN_TEMP = 5.0
+MAX_TEMP = 35.0
+TEMP_STEP = 0.5

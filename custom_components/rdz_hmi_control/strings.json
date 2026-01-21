@@ -1,0 +1,73 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "RDZ HMI Control Setup",
+        "description": "Enter the Modbus TCP connection details for your RDZ HMI device.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the Modbus TCP device",
+          "port": "Modbus TCP port (default: 8000)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Modbus device. Please check the host and port.",
+      "no_zones_found": "No active zones found. Make sure thermostats are connected and have non-zero temperature readings.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Thermostats",
+        "description": "Select a zone to configure.",
+        "data": {
+          "zone_id": "Zone"
+        }
+      },
+      "configure_zone": {
+        "title": "Configure Zone",
+        "description": "Configure the thermostat settings for this zone.",
+        "data": {
+          "name": "Name",
+          "type": "Thermostat Type",
+          "linked_virtual_zone": "Linked Virtual Thermostat"
+        },
+        "data_description": {
+          "name": "Custom name for this zone (e.g., Living Room)",
+          "type": "Select Real for a physical thermostat or Virtual for a thermostat that mirrors a real one",
+          "linked_virtual_zone": "When this thermostat's setpoints change, automatically update the linked virtual thermostat"
+        }
+      }
+    },
+    "abort": {
+      "no_zones": "No zones available to configure."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "winter_setpoint": {
+        "name": "Winter setpoint"
+      },
+      "summer_setpoint": {
+        "name": "Summer setpoint"
+      }
+    },
+    "switch": {
+      "season": {
+        "name": "Season",
+        "state": {
+          "on": "Summer",
+          "off": "Winter"
+        }
+      }
+    }
+  }
+}
