@@ -11,6 +11,11 @@ A custom Home Assistant integration for controlling RDZ Graphic Tablet (HMI) the
 - Global season switch to toggle between heating and cooling
 - Automatic setpoint synchronization between real and virtual thermostats
 - Real-time temperature monitoring
+- Outside temperature sensor
+- Water temperature monitoring (delivery and calculated temperatures for 8 systems)
+- Pump status monitoring (8 pumps)
+- System activation control (8 systems)
+- System time configuration (day, month, year, hour, minute)
 
 ## Prerequisites
 
@@ -124,6 +129,25 @@ When you link a real thermostat to a virtual one:
 - Changing the temperature on the real thermostat updates both setpoints
 - The virtual thermostat's setpoint stays synchronized automatically
 - This allows you to use the physical thermostat dial to control cooling temperature
+
+### System-Level Entities
+
+The integration creates a "RDZ HMI System" device with the following entities:
+
+**Sensors:**
+- **Outside Temperature**: Current outdoor temperature from the system
+- **Delivery Water Temperature 1-8**: Actual water temperatures being delivered by each system
+- **Calculated Water Temperature 1-8**: Target water temperatures calculated by each system
+
+**Binary Sensors:**
+- **Pump 1-8 Active**: Shows whether each circulation pump is currently running
+
+**Switches:**
+- **Season Switch**: Controls global heating/cooling mode
+- **System 1-8**: Enable/disable each heating/cooling system
+
+**Number Entities:**
+- **Day, Month, Year, Hour, Minute**: Configure the RDZ system's internal clock
 
 ## Troubleshooting
 

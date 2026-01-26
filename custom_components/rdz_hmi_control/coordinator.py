@@ -17,11 +17,21 @@ from .const import (
     CONF_PORT,
     CONF_ZONE_TYPE,
     CONF_ZONES,
+    DATA_CALCULATED_WATER_TEMPS,
+    DATA_DEHUMIDIFICATION_SETPOINTS,
+    DATA_DELIVERY_WATER_TEMPS,
+    DATA_DEW_POINTS,
+    DATA_HUMIDITY,
+    DATA_OUTSIDE_TEMP,
+    DATA_PUMP_ACTIVE,
     DATA_SEASON,
     DATA_SUMMER_SETPOINTS,
+    DATA_SYSTEM_ACTIVATION,
     DATA_TEMPERATURES,
+    DATA_TIME_SETTINGS,
     DATA_WINTER_SETPOINTS,
     DATA_ZONE_ACTIVITY,
+    DATA_ZONE_MODES,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -70,6 +80,18 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             summer_setpoints = await self.client.read_summer_setpoints()
             season = await self.client.read_season()
             zone_activity = await self.client.read_zone_activity()
+            humidity = await self.client.read_humidity()
+            dehumidification_setpoints = await self.client.read_dehumidification_setpoints()
+            dew_points = await self.client.read_dew_points()
+            zone_modes = await self.client.read_zone_modes()
+
+            # Read new system-level data
+            outside_temp = await self.client.read_outside_temperature()
+            time_settings = await self.client.read_time_settings()
+            system_activation = await self.client.read_system_activation()
+            delivery_water_temps = await self.client.read_delivery_water_temps()
+            calculated_water_temps = await self.client.read_calculated_water_temps()
+            pump_active = await self.client.read_pump_active()
 
             if temperatures is None or winter_setpoints is None or summer_setpoints is None:
                 raise UpdateFailed("Failed to read data from Modbus device")
@@ -86,6 +108,17 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 DATA_SUMMER_SETPOINTS: summer_setpoints,
                 DATA_SEASON: season,  # True = summer, False = winter, None = unknown
                 DATA_ZONE_ACTIVITY: zone_activity,  # dict of zone_id -> is_active
+                DATA_HUMIDITY: humidity,
+                DATA_DEHUMIDIFICATION_SETPOINTS: dehumidification_setpoints,
+                DATA_DEW_POINTS: dew_points,
+                DATA_ZONE_MODES: zone_modes,
+                # New system-level data
+                DATA_OUTSIDE_TEMP: outside_temp,
+                DATA_TIME_SETTINGS: time_settings,
+                DATA_SYSTEM_ACTIVATION: system_activation,
+                DATA_DELIVERY_WATER_TEMPS: delivery_water_temps,
+                DATA_CALCULATED_WATER_TEMPS: calculated_water_temps,
+                DATA_PUMP_ACTIVE: pump_active,
             }
 
         except Exception as ex:
@@ -175,6 +208,64 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Request a data refresh to update the UI
             await self.async_request_refresh()
 
+        return success
+
+    async def async_set_dehumidification_setpoint(
+        self, zone_id: int, humidity: float
+    ) -> bool:
+        """Set the dehumidification setpoint for a zone."""
+        success = await self.client.write_dehumidification_setpoint(zone_id, humidity)
+        if success:
+            await self.async_request_refresh()
+        return success
+
+    async def async_set_zone_mode(self, zone_id: int, mode: int) -> bool:
+        """Set the zone mode for a zone."""
+        success = await self.client.write_zone_mode(zone_id, mode)
+        if success:
+            await self.async_request_refresh()
+        return success
+
+    async def async_set_system_activation(self, system_id: int, is_on: bool) -> bool:
+        """Set system activation for a system (1-8)."""
+        success = await self.client.write_system_activation(system_id, is_on)
+        if success:
+            await self.async_request_refresh()
+        return success
+
+    async def async_set_time_day(self, day: int) -> bool:
+        """Set the day value."""
+        success = await self.client.write_time_day(day)
+        if success:
+            await self.async_request_refresh()
+        return success
+
+    async def async_set_time_month(self, month: int) -> bool:
+        """Set the month value."""
+        success = await self.client.write_time_month(month)
+        if success:
+            await self.async_request_refresh()
+        return success
+
+    async def async_set_time_year(self, year: int) -> bool:
+        """Set the year value."""
+        success = await self.client.write_time_year(year)
+        if success:
+            await self.async_request_refresh()
+        return success
+
+    async def async_set_time_hour(self, hour: int) -> bool:
+        """Set the hour value."""
+        success = await self.client.write_time_hour(hour)
+        if success:
+            await self.async_request_refresh()
+        return success
+
+    async def async_set_time_minute(self, minute: int) -> bool:
+        """Set the minute value."""
+        success = await self.client.write_time_minute(minute)
+        if success:
+            await self.async_request_refresh()
         return success
 
     async def async_shutdown(self) -> None:
