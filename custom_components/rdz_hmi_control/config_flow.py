@@ -139,7 +139,7 @@ class RDZHMIOptionsFlow(config_entries.OptionsFlow):
         zone_options = []
         for zone_id_str, zone_data in zones_config.items():
             zone_id = int(zone_id_str) if isinstance(zone_id_str, str) else zone_id_str
-            zone_name = zone_data.get(CONF_ZONE_NAME, f"Zone {zone_id}")
+            zone_name = f"[Zone {zone_id}] "+zone_data.get(CONF_ZONE_NAME, "")
             zone_type = zone_data.get(CONF_ZONE_TYPE, THERMOSTAT_TYPE_UNCONFIGURED)
             type_label = {
                 THERMOSTAT_TYPE_REAL: "Real",
