@@ -31,6 +31,11 @@ from .modbus_client import RDZModbusClient
 _LOGGER = logging.getLogger(__name__)
 
 
+def _format_zone_id(zone_id: int | str) -> str:
+    """Format zone ID as zero-padded two-digit string for consistent ordering."""
+    return f"{int(zone_id):02d}"
+
+
 class RDZHMIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for RDZ HMI Control."""
 
@@ -68,8 +73,9 @@ class RDZHMIConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._abort_if_unique_id_configured()
 
                         # Build initial zone config (all unconfigured)
+                        # Use zero-padded string keys for consistent ordering
                         zones_config = {
-                            zone_id: {
+                            _format_zone_id(zone_id): {
                                 CONF_ZONE_ID: zone_id,
                                 CONF_ZONE_NAME: f"Zone {zone_id}",
                                 CONF_ZONE_TYPE: THERMOSTAT_TYPE_UNCONFIGURED,
@@ -127,6 +133,8 @@ class RDZHMIOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Handle the initial options step - select zone to configure."""
         zones_config: dict = self._config_entry.data.get(CONF_ZONES, {})
+        # Normalize keys to zero-padded strings for consistent ordering
+        zones_config = {_format_zone_id(k): v for k, v in zones_config.items()}
 
         if not zones_config:
             return self.async_abort(reason="no_zones")
@@ -148,7 +156,7 @@ class RDZHMIOptionsFlow(config_entries.OptionsFlow):
             }.get(zone_type, "Unknown")
             zone_options.append(
                 selector.SelectOptionDict(
-                    value=str(zone_id),
+                    value=_format_zone_id(zone_id),
                     label=f"{zone_name} ({type_label})",
                 )
             )
@@ -172,7 +180,9 @@ class RDZHMIOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Handle zone configuration step."""
         zones_config: dict = dict(self._config_entry.data.get(CONF_ZONES, {}))
-        zone_id_str = str(self._selected_zone_id)
+        # Normalize keys to zero-padded strings for consistent ordering
+        zones_config = {_format_zone_id(k): v for k, v in zones_config.items()}
+        zone_id_str = _format_zone_id(self._selected_zone_id)
         current_zone = zones_config.get(zone_id_str, {})
 
         if user_input is not None:
@@ -207,16 +217,28 @@ class RDZHMIOptionsFlow(config_entries.OptionsFlow):
         current_type = current_zone.get(CONF_ZONE_TYPE, THERMOSTAT_TYPE_UNCONFIGURED)
         current_linked = current_zone.get(CONF_LINKED_VIRTUAL_ZONE)
 
-        # Build virtual zone options for linking (exclude current zone)
+        # Collect virtual zones already linked to other real thermostats
+        already_linked_virtuals = set()
+        for zid_str, zone_data in zones_config.items():
+            zid = int(zid_str) if isinstance(zid_str, str) else zid_str
+            if zid != self._selected_zone_id and zone_data.get(CONF_ZONE_TYPE) == THERMOSTAT_TYPE_REAL:
+                linked = zone_data.get(CONF_LINKED_VIRTUAL_ZONE)
+                if linked is not None:
+                    already_linked_virtuals.add(linked)
+
+        # Build virtual zone options for linking (exclude current zone and already-linked virtuals)
         virtual_zone_options = [
             selector.SelectOptionDict(value="none", label="None")
         ]
         for zid_str, zone_data in zones_config.items():
             zid = int(zid_str) if isinstance(zid_str, str) else zid_str
             if zid != self._selected_zone_id and zone_data.get(CONF_ZONE_TYPE) == THERMOSTAT_TYPE_VIRTUAL:
+                # Skip if already linked to another real thermostat
+                if zid in already_linked_virtuals:
+                    continue
                 zone_name = zone_data.get(CONF_ZONE_NAME, f"Zone {zid}")
                 virtual_zone_options.append(
-                    selector.SelectOptionDict(value=str(zid), label=zone_name)
+                    selector.SelectOptionDict(value=_format_zone_id(zid), label=zone_name)
                 )
 
         # Build schema
@@ -240,11 +262,12 @@ class RDZHMIOptionsFlow(config_entries.OptionsFlow):
             ),
         }
 
-        # Only show linked virtual zone option for real thermostats with available virtual zones
-        if current_type == THERMOSTAT_TYPE_REAL and len(virtual_zone_options) > 1:
+        # Show linked virtual zone option when virtual zones are available
+        # (selection is only used if user chooses "Real" type - handled in user_input processing)
+        if len(virtual_zone_options) > 1:
             schema_dict[vol.Optional(
                 CONF_LINKED_VIRTUAL_ZONE,
-                default=str(current_linked) if current_linked else "none"
+                default=_format_zone_id(current_linked) if current_linked else "none"
             )] = selector.SelectSelector(
                 selector.SelectSelectorConfig(
                     options=virtual_zone_options,
