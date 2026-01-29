@@ -14,6 +14,8 @@ from .const import (
     REGISTER_ACTIVITY_START,
     REGISTER_CALCULATED_WATER_TEMP_COUNT,
     REGISTER_CALCULATED_WATER_TEMP_START,
+    REGISTER_DEHUMIDIFICATION_PUMP_COUNT,
+    REGISTER_DEHUMIDIFICATION_PUMP_START,
     REGISTER_DEHUMIDIFICATION_SETPOINT_COUNT,
     REGISTER_DEHUMIDIFICATION_SETPOINT_START,
     REGISTER_DELIVERY_WATER_TEMP_COUNT,
@@ -21,9 +23,15 @@ from .const import (
     REGISTER_DEW_POINT_COUNT,
     REGISTER_DEW_POINT_START,
     REGISTER_HUMIDITY_COUNT,
+    REGISTER_HUMIDITY_REQUEST_COUNT,
+    REGISTER_HUMIDITY_REQUEST_START,
     REGISTER_HUMIDITY_START,
+    REGISTER_INTEGRATION_REQUEST_COUNT,
+    REGISTER_INTEGRATION_REQUEST_START,
     REGISTER_OUTSIDE_TEMP,
     REGISTER_PUMP_ACTIVE,
+    REGISTER_RENEWAL_REQUEST_COUNT,
+    REGISTER_RENEWAL_REQUEST_START,
     REGISTER_TEMP_START,
     REGISTER_TEMP_COUNT,
     REGISTER_TIME_DAY,
@@ -31,6 +39,8 @@ from .const import (
     REGISTER_TIME_MINUTE,
     REGISTER_TIME_MONTH,
     REGISTER_TIME_YEAR,
+    REGISTER_VENTILATION_REQUEST_COUNT,
+    REGISTER_VENTILATION_REQUEST_START,
     REGISTER_WINTER_SETPOINT_START,
     REGISTER_WINTER_SETPOINT_COUNT,
     REGISTER_SUMMER_SETPOINT_START,
@@ -468,3 +478,67 @@ class RDZModbusClient:
             return None
         bitmask = registers[0]
         return {i + 1: bool(bitmask & (1 << i)) for i in range(8)}
+
+    async def _read_zone_bitmask(self, start_register: int, count: int) -> dict[int, bool] | None:
+        """Generic zone bitmask reader for 64 zones across 4 registers.
+
+        Each register contains 16 bits, with bit 0 of register 0 being zone 0,
+        bit 15 of register 0 being zone 15, bit 0 of register 1 being zone 16, etc.
+
+        Returns dict of zone_id (0-63) -> is_active (True/False).
+        """
+        registers = await self.read_registers(start_register, count)
+        if registers is None:
+            return None
+
+        result: dict[int, bool] = {}
+        for reg_idx, reg_value in enumerate(registers):
+            for bit in range(16):
+                zone_id = reg_idx * 16 + bit
+                result[zone_id] = bool(reg_value & (1 << bit))
+        return result
+
+    async def read_humidity_request(self) -> dict[int, bool] | None:
+        """Read humidity request bitmasks (registers 2896-2899).
+
+        Returns dict of zone_id (0-63) -> is_requesting (True/False).
+        """
+        return await self._read_zone_bitmask(
+            REGISTER_HUMIDITY_REQUEST_START, REGISTER_HUMIDITY_REQUEST_COUNT
+        )
+
+    async def read_ventilation_request(self) -> dict[int, bool] | None:
+        """Read ventilation request bitmasks (registers 2900-2903).
+
+        Returns dict of zone_id (0-63) -> is_requesting (True/False).
+        """
+        return await self._read_zone_bitmask(
+            REGISTER_VENTILATION_REQUEST_START, REGISTER_VENTILATION_REQUEST_COUNT
+        )
+
+    async def read_renewal_request(self) -> dict[int, bool] | None:
+        """Read renewal request bitmasks (registers 2904-2907).
+
+        Returns dict of zone_id (0-63) -> is_requesting (True/False).
+        """
+        return await self._read_zone_bitmask(
+            REGISTER_RENEWAL_REQUEST_START, REGISTER_RENEWAL_REQUEST_COUNT
+        )
+
+    async def read_integration_request(self) -> dict[int, bool] | None:
+        """Read integration request bitmasks (registers 2908-2911).
+
+        Returns dict of zone_id (0-63) -> is_requesting (True/False).
+        """
+        return await self._read_zone_bitmask(
+            REGISTER_INTEGRATION_REQUEST_START, REGISTER_INTEGRATION_REQUEST_COUNT
+        )
+
+    async def read_dehumidification_pump(self) -> dict[int, bool] | None:
+        """Read dehumidification pump bitmasks (registers 2912-2915).
+
+        Returns dict of zone_id (0-63) -> is_active (True/False).
+        """
+        return await self._read_zone_bitmask(
+            REGISTER_DEHUMIDIFICATION_PUMP_START, REGISTER_DEHUMIDIFICATION_PUMP_COUNT
+        )

@@ -15,12 +15,32 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_LINKED_VIRTUAL_ZONE,
+    CONF_ZONE_NAME,
+    CONF_ZONE_TYPE,
+    CONF_ZONES,
+    DATA_DEHUMIDIFICATION_PUMP,
+    DATA_HUMIDITY_REQUEST,
+    DATA_INTEGRATION_REQUEST,
     DATA_PUMP_ACTIVE,
+    DATA_RENEWAL_REQUEST,
+    DATA_VENTILATION_REQUEST,
+    DATA_ZONE_ACTIVITY,
     DOMAIN,
+    THERMOSTAT_TYPE_REAL,
 )
 from .coordinator import RDZDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Zone request types with their data keys and display names
+ZONE_REQUEST_TYPES: dict[str, tuple[str, str]] = {
+    "humidity_request": (DATA_HUMIDITY_REQUEST, "Humidity request"),
+    "ventilation_request": (DATA_VENTILATION_REQUEST, "Ventilation request"),
+    "renewal_request": (DATA_RENEWAL_REQUEST, "Renewal request"),
+    "integration_request": (DATA_INTEGRATION_REQUEST, "Integration request"),
+    "dehumidification_pump": (DATA_DEHUMIDIFICATION_PUMP, "Dehumidification pump"),
+}
 
 
 async def async_setup_entry(
@@ -30,12 +50,24 @@ async def async_setup_entry(
 ) -> None:
     """Set up RDZ HMI binary sensor entities from a config entry."""
     coordinator: RDZDataUpdateCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    zones_config = config_entry.data.get(CONF_ZONES, {})
 
     entities: list[BinarySensorEntity] = []
 
     # Add pump active binary sensors (1-8)
     for pump_id in range(1, 9):
         entities.append(RDZPumpActiveBinarySensor(coordinator, pump_id))
+
+    # Add zone pump binary sensors for each configured zone
+    for zone_id_str, zone_data in zones_config.items():
+        zone_id = int(zone_id_str) if isinstance(zone_id_str, str) else zone_id_str
+        entities.append(RDZZonePumpBinarySensor(coordinator, zone_id, zone_data))
+
+        # Add zone request binary sensors (5 per zone)
+        for request_type in ZONE_REQUEST_TYPES:
+            entities.append(
+                RDZZoneRequestBinarySensor(coordinator, zone_id, zone_data, request_type)
+            )
 
     async_add_entities(entities)
 
@@ -84,4 +116,159 @@ class RDZPumpActiveBinarySensor(CoordinatorEntity[RDZDataUpdateCoordinator], Bin
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+
+class RDZZonePumpBinarySensor(CoordinatorEntity[RDZDataUpdateCoordinator], BinarySensorEntity):
+    """Representation of an RDZ HMI zone pump binary sensor.
+
+    Indicates whether the zone is actively heating or cooling.
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+
+    def __init__(
+        self,
+        coordinator: RDZDataUpdateCoordinator,
+        zone_id: int,
+        zone_data: dict,
+    ) -> None:
+        """Initialize the zone pump binary sensor entity."""
+        super().__init__(coordinator)
+        self._zone_id = zone_id
+        self._zone_data = zone_data
+
+        zone_name = zone_data.get(CONF_ZONE_NAME, f"Zone {zone_id}")
+
+        self._attr_unique_id = f"{DOMAIN}_{coordinator.client.host}_{zone_id}_zone_pump"
+        self._attr_name = "Zone pump"
+
+        # Place on the zone's device
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{coordinator.client.host}_{zone_id}")},
+            name=zone_name,
+            manufacturer="RDZ",
+            model="HMI Thermostat",
+            sw_version="1.0",
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the zone is actively heating or cooling.
+
+        Uses the same logic as hvac_action in climate.py:
+        - For real thermostats: True if this zone or linked virtual zone is active
+        - For virtual/unconfigured: Always False
+        """
+        zone_type = self._zone_data.get(CONF_ZONE_TYPE)
+
+        if zone_type != THERMOSTAT_TYPE_REAL:
+            return False
+
+        if self.coordinator.data is None:
+            return None
+
+        zone_activity = self.coordinator.data.get(DATA_ZONE_ACTIVITY, {})
+
+        # Check if this zone is active
+        if zone_activity.get(self._zone_id, False):
+            return True
+
+        # Check if linked virtual zone is active
+        linked_virtual = self._zone_data.get(CONF_LINKED_VIRTUAL_ZONE)
+        if linked_virtual is not None and zone_activity.get(linked_virtual, False):
+            return True
+
+        return False
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Update zone_data in case config changed
+        zones_config = self.coordinator.config_entry.data.get(CONF_ZONES, {})
+        self._zone_data = zones_config.get(str(self._zone_id), self._zone_data)
+        self.async_write_ha_state()
+
+
+class RDZZoneRequestBinarySensor(CoordinatorEntity[RDZDataUpdateCoordinator], BinarySensorEntity):
+    """Representation of an RDZ HMI zone request binary sensor.
+
+    Indicates whether the zone has an active request (humidity, ventilation,
+    renewal, integration, or dehumidification pump).
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+
+    def __init__(
+        self,
+        coordinator: RDZDataUpdateCoordinator,
+        zone_id: int,
+        zone_data: dict,
+        request_type: str,
+    ) -> None:
+        """Initialize the zone request binary sensor entity.
+
+        Args:
+            coordinator: The data coordinator.
+            zone_id: The zone ID (0-63).
+            zone_data: Zone configuration data.
+            request_type: The type of request (key in ZONE_REQUEST_TYPES).
+        """
+        super().__init__(coordinator)
+        self._zone_id = zone_id
+        self._zone_data = zone_data
+        self._request_type = request_type
+        self._data_key, self._display_name = ZONE_REQUEST_TYPES[request_type]
+
+        zone_name = zone_data.get(CONF_ZONE_NAME, f"Zone {zone_id}")
+
+        self._attr_unique_id = f"{DOMAIN}_{coordinator.client.host}_{zone_id}_{request_type}"
+        self._attr_name = self._display_name
+
+        # Place on the zone's device
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{coordinator.client.host}_{zone_id}")},
+            name=zone_name,
+            manufacturer="RDZ",
+            model="HMI Thermostat",
+            sw_version="1.0",
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the zone has the request active.
+
+        Uses the same logic as RDZZonePumpBinarySensor:
+        - For real thermostats: True if this zone or linked virtual zone is active
+        - For virtual/unconfigured: Always False
+        """
+        zone_type = self._zone_data.get(CONF_ZONE_TYPE)
+
+        if zone_type != THERMOSTAT_TYPE_REAL:
+            return False
+
+        if self.coordinator.data is None:
+            return None
+
+        request_data = self.coordinator.data.get(self._data_key, {})
+
+        # Check if this zone has the request active
+        if request_data.get(self._zone_id, False):
+            return True
+
+        # Check if linked virtual zone has the request active
+        linked_virtual = self._zone_data.get(CONF_LINKED_VIRTUAL_ZONE)
+        if linked_virtual is not None and request_data.get(linked_virtual, False):
+            return True
+
+        return False
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        # Update zone_data in case config changed
+        zones_config = self.coordinator.config_entry.data.get(CONF_ZONES, {})
+        self._zone_data = zones_config.get(str(self._zone_id), self._zone_data)
         self.async_write_ha_state()

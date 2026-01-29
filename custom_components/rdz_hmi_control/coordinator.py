@@ -18,17 +18,22 @@ from .const import (
     CONF_ZONE_TYPE,
     CONF_ZONES,
     DATA_CALCULATED_WATER_TEMPS,
+    DATA_DEHUMIDIFICATION_PUMP,
     DATA_DEHUMIDIFICATION_SETPOINTS,
     DATA_DELIVERY_WATER_TEMPS,
     DATA_DEW_POINTS,
     DATA_HUMIDITY,
+    DATA_HUMIDITY_REQUEST,
+    DATA_INTEGRATION_REQUEST,
     DATA_OUTSIDE_TEMP,
     DATA_PUMP_ACTIVE,
+    DATA_RENEWAL_REQUEST,
     DATA_SEASON,
     DATA_SUMMER_SETPOINTS,
     DATA_SYSTEM_ACTIVATION,
     DATA_TEMPERATURES,
     DATA_TIME_SETTINGS,
+    DATA_VENTILATION_REQUEST,
     DATA_WINTER_SETPOINTS,
     DATA_ZONE_ACTIVITY,
     DATA_ZONE_MODES,
@@ -93,6 +98,13 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             calculated_water_temps = await self.client.read_calculated_water_temps()
             pump_active = await self.client.read_pump_active()
 
+            # Read zone request bitmasks
+            humidity_request = await self.client.read_humidity_request()
+            ventilation_request = await self.client.read_ventilation_request()
+            renewal_request = await self.client.read_renewal_request()
+            integration_request = await self.client.read_integration_request()
+            dehumidification_pump = await self.client.read_dehumidification_pump()
+
             if temperatures is None or winter_setpoints is None or summer_setpoints is None:
                 raise UpdateFailed("Failed to read data from Modbus device")
 
@@ -119,6 +131,12 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 DATA_DELIVERY_WATER_TEMPS: delivery_water_temps,
                 DATA_CALCULATED_WATER_TEMPS: calculated_water_temps,
                 DATA_PUMP_ACTIVE: pump_active,
+                # Zone request bitmasks
+                DATA_HUMIDITY_REQUEST: humidity_request,
+                DATA_VENTILATION_REQUEST: ventilation_request,
+                DATA_RENEWAL_REQUEST: renewal_request,
+                DATA_INTEGRATION_REQUEST: integration_request,
+                DATA_DEHUMIDIFICATION_PUMP: dehumidification_pump,
             }
 
         except Exception as ex:
