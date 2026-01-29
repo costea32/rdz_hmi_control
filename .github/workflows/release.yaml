@@ -1,0 +1,43 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.1.5)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Update manifest.json
+        run: |
+          sed -i 's/"version": ".*"/"version": "${{ github.event.inputs.version }}"/' custom_components/rdz_hmi_control/manifest.json
+
+      - name: Commit manifest change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_components/rdz_hmi_control/manifest.json
+          git commit -m "Bump version to ${{ github.event.inputs.version }}"
+          git push
+
+      - name: Create tag
+        run: |
+          git tag v${{ github.event.inputs.version }}
+          git push origin v${{ github.event.inputs.version }}
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.event.inputs.version }}
+          release_name: v${{ github.event.inputs.version }}
+          draft: true
+          prerelease: false
