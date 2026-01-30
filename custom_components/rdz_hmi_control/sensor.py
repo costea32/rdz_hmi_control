@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -23,6 +23,7 @@ from .const import (
     DATA_CALCULATED_WATER_TEMPS,
     DATA_DELIVERY_WATER_TEMPS,
     DATA_DEW_POINTS,
+    DATA_HUMIDITY,
     DATA_OUTSIDE_TEMP,
     DATA_SUMMER_SETPOINTS,
     DATA_WINTER_SETPOINTS,
@@ -57,6 +58,10 @@ async def async_setup_entry(
         # Create dew point sensor for each zone
         entities.append(
             RDZDewPointSensor(coordinator, zone_id, zone_data)
+        )
+        # Create humidity sensor for each zone
+        entities.append(
+            RDZHumiditySensor(coordinator, zone_id, zone_data)
         )
 
     # System-level sensors
@@ -210,6 +215,81 @@ class RDZDewPointSensor(CoordinatorEntity[RDZDataUpdateCoordinator], SensorEntit
 
         dew_points = self.coordinator.data.get(DATA_DEW_POINTS, {})
         return dew_points.get(self._zone_id)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._update_device_info()
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        """When entity is added to hass."""
+        await super().async_added_to_hass()
+
+        # Listen for config entry updates
+        self.async_on_remove(
+            self.coordinator.config_entry.add_update_listener(self._async_config_entry_updated)
+        )
+
+    async def _async_config_entry_updated(
+        self, hass: HomeAssistant, entry: ConfigEntry
+    ) -> None:
+        """Handle config entry update."""
+        self._update_device_info()
+        self.async_write_ha_state()
+
+
+class RDZHumiditySensor(CoordinatorEntity[RDZDataUpdateCoordinator], SensorEntity):
+    """Representation of an RDZ HMI humidity sensor."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.HUMIDITY
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = PERCENTAGE
+
+    def __init__(
+        self,
+        coordinator: RDZDataUpdateCoordinator,
+        zone_id: int,
+        zone_data: dict[str, Any],
+    ) -> None:
+        """Initialize the humidity sensor entity."""
+        super().__init__(coordinator)
+        self._zone_id = zone_id
+        self._zone_data = zone_data
+
+        self._attr_unique_id = (
+            f"{DOMAIN}_{coordinator.client.host}_{zone_id}_humidity"
+        )
+        self._attr_translation_key = "humidity"
+        self._attr_name = "Humidity"
+
+        self._update_device_info()
+
+    def _update_device_info(self) -> None:
+        """Update device info from zone data."""
+        zones_config = self.coordinator.config_entry.data.get(CONF_ZONES, {})
+        zone_data = zones_config.get(str(self._zone_id), self._zone_data)
+        self._zone_data = zone_data
+
+        zone_name = zone_data.get(CONF_ZONE_NAME, f"Zone {self._zone_id}")
+
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{self.coordinator.client.host}_{self._zone_id}")},
+            name=zone_name,
+            manufacturer="RDZ",
+            model="HMI Thermostat",
+            sw_version="1.0",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the sensor value."""
+        if self.coordinator.data is None:
+            return None
+
+        humidity = self.coordinator.data.get(DATA_HUMIDITY, {})
+        return humidity.get(self._zone_id)
 
     @callback
     def _handle_coordinator_update(self) -> None:

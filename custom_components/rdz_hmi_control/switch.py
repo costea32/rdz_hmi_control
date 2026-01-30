@@ -45,7 +45,7 @@ class RDZSeasonSwitch(CoordinatorEntity[RDZDataUpdateCoordinator], SwitchEntity)
     """Representation of the RDZ HMI season switch."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "season"
+    _attr_name = "Summer Mode"
     _attr_icon = "mdi:sun-snowflake-variant"
 
     def __init__(
