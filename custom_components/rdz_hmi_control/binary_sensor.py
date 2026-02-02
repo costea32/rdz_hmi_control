@@ -24,6 +24,10 @@ from .const import (
     DATA_INTEGRATION_REQUEST,
     DATA_PUMP_ACTIVE,
     DATA_RENEWAL_REQUEST,
+    DATA_VENTILATION_MODE_DEHUMIDIFICATION,
+    DATA_VENTILATION_MODE_INTEGRATION,
+    DATA_VENTILATION_MODE_RENEWAL,
+    DATA_VENTILATION_MODE_VENTILATION,
     DATA_VENTILATION_REQUEST,
     DATA_ZONE_ACTIVITY,
     DOMAIN,
@@ -42,6 +46,14 @@ ZONE_REQUEST_TYPES: dict[str, tuple[str, str]] = {
     "dehumidification_pump": (DATA_DEHUMIDIFICATION_PUMP, "Dehumidification pump"),
 }
 
+# Ventilation mode types with their data keys and display names
+VENTILATION_MODE_TYPES: dict[str, tuple[str, str]] = {
+    "dehumidification": (DATA_VENTILATION_MODE_DEHUMIDIFICATION, "Dehumidification"),
+    "ventilation": (DATA_VENTILATION_MODE_VENTILATION, "Ventilation"),
+    "renewal": (DATA_VENTILATION_MODE_RENEWAL, "Renewal"),
+    "integration": (DATA_VENTILATION_MODE_INTEGRATION, "Integration"),
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -57,6 +69,10 @@ async def async_setup_entry(
     # Add pump active binary sensors (1-8)
     for pump_id in range(1, 9):
         entities.append(RDZPumpActiveBinarySensor(coordinator, pump_id))
+
+    # Add ventilation mode binary sensors
+    for mode_type in VENTILATION_MODE_TYPES:
+        entities.append(RDZVentilationModeBinarySensor(coordinator, mode_type))
 
     # Add zone pump binary sensors for each configured zone
     for zone_id_str, zone_data in zones_config.items():
@@ -112,6 +128,55 @@ class RDZPumpActiveBinarySensor(CoordinatorEntity[RDZDataUpdateCoordinator], Bin
             return None
         pump_active = self.coordinator.data.get(DATA_PUMP_ACTIVE, {})
         return pump_active.get(self._pump_id)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self.async_write_ha_state()
+
+
+class RDZVentilationModeBinarySensor(CoordinatorEntity[RDZDataUpdateCoordinator], BinarySensorEntity):
+    """Representation of an RDZ HMI ventilation mode binary sensor.
+
+    Indicates whether a ventilation unit work mode is active.
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.RUNNING
+
+    def __init__(
+        self,
+        coordinator: RDZDataUpdateCoordinator,
+        mode_type: str,
+    ) -> None:
+        """Initialize the ventilation mode binary sensor entity.
+
+        Args:
+            coordinator: The data coordinator.
+            mode_type: The type of ventilation mode (key in VENTILATION_MODE_TYPES).
+        """
+        super().__init__(coordinator)
+        self._mode_type = mode_type
+        self._data_key, self._display_name = VENTILATION_MODE_TYPES[mode_type]
+
+        self._attr_unique_id = f"{DOMAIN}_{coordinator.client.host}_ventilation_mode_{mode_type}"
+        self._attr_name = self._display_name
+
+        # Place on the System device
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, f"{coordinator.client.host}_system")},
+            name="RDZ HMI System",
+            manufacturer="RDZ",
+            model="HMI Control System",
+            sw_version="1.0",
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if the ventilation mode is active."""
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get(self._data_key)
 
     @callback
     def _handle_coordinator_update(self) -> None:

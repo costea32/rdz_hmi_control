@@ -140,6 +140,12 @@ REGISTER_CALCULATED_WATER_TEMP_COUNT = 8
 # Pump active bitmask register
 REGISTER_PUMP_ACTIVE = 7615
 
+# Ventilation mode registers (LSB = on/off)
+REGISTER_VENTILATION_MODE_DEHUMIDIFICATION = 8201
+REGISTER_VENTILATION_MODE_VENTILATION = 8202
+REGISTER_VENTILATION_MODE_RENEWAL = 8203
+REGISTER_VENTILATION_MODE_INTEGRATION = 8204
+
 # Data keys for new features
 DATA_OUTSIDE_TEMP = "outside_temperature"
 DATA_TIME_SETTINGS = "time_settings"
@@ -148,3 +154,7 @@ DATA_DELIVERY_WATER_TEMPS = "delivery_water_temps"
 DATA_CALCULATED_WATER_TEMPS = "calculated_water_temps"
 DATA_PUMP_ACTIVE = "pump_active"
 DATA_CALCULATED_SETPOINTS = "calculated_setpoints"
+DATA_VENTILATION_MODE_DEHUMIDIFICATION = "ventilation_mode_dehumidification"
+DATA_VENTILATION_MODE_VENTILATION = "ventilation_mode_ventilation"
+DATA_VENTILATION_MODE_RENEWAL = "ventilation_mode_renewal"
+DATA_VENTILATION_MODE_INTEGRATION = "ventilation_mode_integration"

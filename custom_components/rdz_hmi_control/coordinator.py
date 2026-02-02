@@ -34,6 +34,10 @@ from .const import (
     DATA_SYSTEM_ACTIVATION,
     DATA_TEMPERATURES,
     DATA_TIME_SETTINGS,
+    DATA_VENTILATION_MODE_DEHUMIDIFICATION,
+    DATA_VENTILATION_MODE_INTEGRATION,
+    DATA_VENTILATION_MODE_RENEWAL,
+    DATA_VENTILATION_MODE_VENTILATION,
     DATA_VENTILATION_REQUEST,
     DATA_WINTER_SETPOINTS,
     DATA_ZONE_ACTIVITY,
@@ -107,6 +111,9 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             integration_request = await self.client.read_integration_request()
             dehumidification_pump = await self.client.read_dehumidification_pump()
 
+            # Read ventilation mode registers
+            ventilation_modes = await self.client.read_ventilation_modes()
+
             if temperatures is None or winter_setpoints is None or summer_setpoints is None:
                 raise UpdateFailed("Failed to read data from Modbus device")
 
@@ -140,6 +147,11 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 DATA_RENEWAL_REQUEST: renewal_request,
                 DATA_INTEGRATION_REQUEST: integration_request,
                 DATA_DEHUMIDIFICATION_PUMP: dehumidification_pump,
+                # Ventilation mode states
+                DATA_VENTILATION_MODE_DEHUMIDIFICATION: ventilation_modes.get("dehumidification") if ventilation_modes else None,
+                DATA_VENTILATION_MODE_VENTILATION: ventilation_modes.get("ventilation") if ventilation_modes else None,
+                DATA_VENTILATION_MODE_RENEWAL: ventilation_modes.get("renewal") if ventilation_modes else None,
+                DATA_VENTILATION_MODE_INTEGRATION: ventilation_modes.get("integration") if ventilation_modes else None,
             }
 
         except Exception as ex:

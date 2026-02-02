@@ -558,3 +558,19 @@ class RDZModbusClient:
         return await self._read_zone_bitmask(
             REGISTER_DEHUMIDIFICATION_PUMP_START, REGISTER_DEHUMIDIFICATION_PUMP_COUNT
         )
+
+    async def read_ventilation_modes(self) -> dict[str, bool] | None:
+        """Read ventilation mode registers 8201-8204.
+
+        Returns dict with keys: dehumidification, ventilation, renewal, integration.
+        LSB (bit 0) of each register indicates on/off state.
+        """
+        registers = await self.read_registers(8201, 4)
+        if registers is None:
+            return None
+        return {
+            "dehumidification": bool(registers[0] & 1),
+            "ventilation": bool(registers[1] & 1),
+            "renewal": bool(registers[2] & 1),
+            "integration": bool(registers[3] & 1),
+        }
