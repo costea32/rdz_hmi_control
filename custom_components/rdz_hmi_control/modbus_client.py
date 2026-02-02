@@ -12,6 +12,8 @@ from .const import (
     COIL_SYSTEM_ACTIVATION_COUNT,
     REGISTER_ACTIVITY_COUNT,
     REGISTER_ACTIVITY_START,
+    REGISTER_CALCULATED_SETPOINT_COUNT,
+    REGISTER_CALCULATED_SETPOINT_START,
     REGISTER_CALCULATED_WATER_TEMP_COUNT,
     REGISTER_CALCULATED_WATER_TEMP_START,
     REGISTER_DEHUMIDIFICATION_PUMP_COUNT,
@@ -220,6 +222,20 @@ class RDZModbusClient:
         """Read all summer setpoint registers."""
         registers = await self.read_registers(
             REGISTER_SUMMER_SETPOINT_START, REGISTER_SUMMER_SETPOINT_COUNT
+        )
+        if registers is None:
+            return None
+
+        return {i: value / TEMP_SCALE_FACTOR for i, value in enumerate(registers)}
+
+    async def read_calculated_setpoints(self) -> dict[int, float] | None:
+        """Read all calculated setpoint registers.
+
+        These are program-calculated target temperatures used in non-manual modes.
+        Values are stored as integer * 10 (e.g., 21.5°C = 215).
+        """
+        registers = await self.read_registers(
+            REGISTER_CALCULATED_SETPOINT_START, REGISTER_CALCULATED_SETPOINT_COUNT
         )
         if registers is None:
             return None

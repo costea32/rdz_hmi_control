@@ -23,21 +23,42 @@ from .const import (
     CONF_ZONE_NAME,
     CONF_ZONE_TYPE,
     CONF_ZONES,
+    DATA_CALCULATED_SETPOINTS,
     DATA_SEASON,
     DATA_SUMMER_SETPOINTS,
     DATA_TEMPERATURES,
     DATA_WINTER_SETPOINTS,
     DATA_ZONE_ACTIVITY,
+    DATA_ZONE_MODES,
     DOMAIN,
     MAX_TEMP,
     MIN_TEMP,
     TEMP_STEP,
+    THERMOSTAT_TYPE_REAL,
     THERMOSTAT_TYPE_UNCONFIGURED,
     THERMOSTAT_TYPE_VIRTUAL,
+    ZONE_MODE_MAN,
+    ZONE_MODE_OFF,
+    ZONE_MODE_OPTIONS,
+    ZONE_MODE_PGM,
+    ZONE_MODE_PGM_MAN,
 )
 from .coordinator import RDZDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+# Preset modes that map to zone modes
+PRESET_OFF = "Off"
+PRESET_MAN = "Man"
+PRESET_PGM = "Pgm"
+PRESET_PGM_MAN = "Pgm/Man"
+
+PRESET_MODE_TO_ZONE_MODE = {
+    PRESET_OFF: ZONE_MODE_OFF,
+    PRESET_MAN: ZONE_MODE_MAN,
+    PRESET_PGM: ZONE_MODE_PGM,
+    PRESET_PGM_MAN: ZONE_MODE_PGM_MAN,
+}
 
 
 async def async_setup_entry(
@@ -66,6 +87,7 @@ class RDZClimateEntity(CoordinatorEntity[RDZDataUpdateCoordinator], ClimateEntit
     _attr_min_temp = MIN_TEMP
     _attr_max_temp = MAX_TEMP
     _attr_target_temperature_step = TEMP_STEP
+    _attr_preset_modes = [PRESET_OFF, PRESET_MAN, PRESET_PGM, PRESET_PGM_MAN]
     _enable_turn_on_off_backwards_compat = False
 
     def __init__(
@@ -93,16 +115,19 @@ class RDZClimateEntity(CoordinatorEntity[RDZDataUpdateCoordinator], ClimateEntit
 
         # Set supported features and HVAC modes based on configuration
         if zone_type == THERMOSTAT_TYPE_UNCONFIGURED:
-            self._attr_supported_features = ClimateEntityFeature(0)
+            self._attr_supported_features = ClimateEntityFeature.PRESET_MODE
             self._attr_hvac_modes = [HVACMode.OFF]
         elif zone_type == THERMOSTAT_TYPE_VIRTUAL:
             # Virtual thermostats are read-only (synced from real thermostats)
-            self._attr_supported_features = ClimateEntityFeature(0)
+            self._attr_supported_features = ClimateEntityFeature.PRESET_MODE
             self._attr_hvac_modes = [HVACMode.OFF]
         else:  # THERMOSTAT_TYPE_REAL
-            # Real thermostats support temperature control
+            # Real thermostats support temperature control and preset mode
             # HVAC mode is determined by season switch (read-only)
-            self._attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+            self._attr_supported_features = (
+                ClimateEntityFeature.TARGET_TEMPERATURE
+                | ClimateEntityFeature.PRESET_MODE
+            )
             self._attr_hvac_modes = [HVACMode.HEAT, HVACMode.COOL]
 
         # Update device info
@@ -125,6 +150,26 @@ class RDZClimateEntity(CoordinatorEntity[RDZDataUpdateCoordinator], ClimateEntit
         else:  # Winter or unknown
             return HVACMode.HEAT
 
+    def _get_effective_zone_id_for_preset(self) -> int:
+        """Get the zone ID to use for preset operations based on season.
+
+        For real thermostats with linked virtual zone:
+        - Summer mode: use linked virtual zone ID (presets control cooling)
+        - Winter mode: use this zone ID (presets control heating)
+
+        For all other thermostats: use own zone ID.
+        """
+        zone_type = self._zone_data.get(CONF_ZONE_TYPE, THERMOSTAT_TYPE_UNCONFIGURED)
+
+        if zone_type == THERMOSTAT_TYPE_REAL:
+            linked_virtual = self._zone_data.get(CONF_LINKED_VIRTUAL_ZONE)
+            if linked_virtual is not None:
+                current_mode = self._get_season_based_hvac_mode()
+                if current_mode == HVACMode.COOL:  # Summer
+                    return linked_virtual
+
+        return self._zone_id
+
     @property
     def current_temperature(self) -> float | None:
         """Return the current temperature."""
@@ -135,18 +180,30 @@ class RDZClimateEntity(CoordinatorEntity[RDZDataUpdateCoordinator], ClimateEntit
 
     @property
     def target_temperature(self) -> float | None:
-        """Return the target temperature based on season (summer=cooling setpoint, winter=heating setpoint)."""
+        """Return the target temperature based on zone mode and season.
+
+        In 'Man' mode: return manual setpoint (winter or summer based on season)
+        In other modes: return calculated setpoint from program
+        """
         if self.coordinator.data is None:
             return None
 
-        current_mode = self._get_season_based_hvac_mode()
+        effective_zone_id = self._get_effective_zone_id_for_preset()
+        zone_modes = self.coordinator.data.get(DATA_ZONE_MODES, {})
+        current_zone_mode = zone_modes.get(effective_zone_id)
 
-        if current_mode == HVACMode.COOL:
-            setpoints = self.coordinator.data.get(DATA_SUMMER_SETPOINTS, {})
-        else:  # HEAT
-            setpoints = self.coordinator.data.get(DATA_WINTER_SETPOINTS, {})
+        # Only use manual setpoints in Man mode
+        if current_zone_mode == ZONE_MODE_MAN:
+            current_hvac_mode = self._get_season_based_hvac_mode()
+            if current_hvac_mode == HVACMode.COOL:
+                setpoints = self.coordinator.data.get(DATA_SUMMER_SETPOINTS, {})
+            else:
+                setpoints = self.coordinator.data.get(DATA_WINTER_SETPOINTS, {})
+            return setpoints.get(self._zone_id)
 
-        return setpoints.get(self._zone_id)
+        # All other modes: use calculated setpoints from effective zone
+        calculated = self.coordinator.data.get(DATA_CALCULATED_SETPOINTS, {})
+        return calculated.get(effective_zone_id)
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -188,6 +245,33 @@ class RDZClimateEntity(CoordinatorEntity[RDZDataUpdateCoordinator], ClimateEntit
 
         return HVACAction.IDLE
 
+    @property
+    def preset_mode(self) -> str | None:
+        """Return the current preset mode based on zone mode."""
+        if self.coordinator.data is None:
+            return None
+
+        effective_zone_id = self._get_effective_zone_id_for_preset()
+        zone_modes = self.coordinator.data.get(DATA_ZONE_MODES, {})
+        mode_value = zone_modes.get(effective_zone_id)
+
+        if mode_value is None:
+            return None
+
+        return ZONE_MODE_OPTIONS.get(mode_value, ZONE_MODE_OPTIONS[ZONE_MODE_OFF])
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set the preset mode by writing to the appropriate zone mode register."""
+        mode_value = PRESET_MODE_TO_ZONE_MODE.get(preset_mode)
+        if mode_value is None:
+            _LOGGER.error("Invalid preset mode: %s", preset_mode)
+            return
+
+        effective_zone_id = self._get_effective_zone_id_for_preset()
+        success = await self.coordinator.async_set_zone_mode(effective_zone_id, mode_value)
+        if not success:
+            _LOGGER.error("Failed to set preset for zone %d", self._zone_id)
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """HVAC mode is read-only - determined by season switch."""
         _LOGGER.debug(
@@ -214,6 +298,18 @@ class RDZClimateEntity(CoordinatorEntity[RDZDataUpdateCoordinator], ClimateEntit
                 self._zone_id,
             )
             return
+
+        # Check if in Man mode using effective zone ID
+        if self.coordinator.data:
+            effective_zone_id = self._get_effective_zone_id_for_preset()
+            zone_modes = self.coordinator.data.get(DATA_ZONE_MODES, {})
+            if zone_modes.get(effective_zone_id) != ZONE_MODE_MAN:
+                _LOGGER.warning(
+                    "Cannot set temperature for zone %d - not in manual mode. "
+                    "Change preset to 'Man' first.",
+                    self._zone_id,
+                )
+                return
 
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:

@@ -17,6 +17,7 @@ from .const import (
     CONF_PORT,
     CONF_ZONE_TYPE,
     CONF_ZONES,
+    DATA_CALCULATED_SETPOINTS,
     DATA_CALCULATED_WATER_TEMPS,
     DATA_DEHUMIDIFICATION_PUMP,
     DATA_DEHUMIDIFICATION_SETPOINTS,
@@ -83,6 +84,7 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             temperatures = await self.client.read_temperatures()
             winter_setpoints = await self.client.read_winter_setpoints()
             summer_setpoints = await self.client.read_summer_setpoints()
+            calculated_setpoints = await self.client.read_calculated_setpoints()
             season = await self.client.read_season()
             zone_activity = await self.client.read_zone_activity()
             humidity = await self.client.read_humidity()
@@ -118,6 +120,7 @@ class RDZDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 DATA_TEMPERATURES: temperatures,
                 DATA_WINTER_SETPOINTS: winter_setpoints,
                 DATA_SUMMER_SETPOINTS: summer_setpoints,
+                DATA_CALCULATED_SETPOINTS: calculated_setpoints,
                 DATA_SEASON: season,  # True = summer, False = winter, None = unknown
                 DATA_ZONE_ACTIVITY: zone_activity,  # dict of zone_id -> is_active
                 DATA_HUMIDITY: humidity,
