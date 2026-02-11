@@ -377,7 +377,10 @@ class RDZModbusClient:
         registers = await self.read_registers(REGISTER_OUTSIDE_TEMP, 1)
         if registers is None:
             return None
-        return registers[0] / TEMP_SCALE_FACTOR
+        raw = registers[0]
+        if raw > 32767:
+            raw -= 65536
+        return raw / TEMP_SCALE_FACTOR
 
     async def read_time_settings(self) -> dict[str, int] | None:
         """Read time settings from registers 5009-5013.
